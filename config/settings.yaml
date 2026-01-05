@@ -1,0 +1,189 @@
+# Personality Detection System Configuration
+# Big Five (OCEAN) Model Settings
+
+# =============================================================================
+# Data Settings
+# =============================================================================
+data:
+  # Primary dataset from HuggingFace
+  huggingface_dataset: "Fatima0923/Automated-Personality-Prediction"
+  
+  # Minimum samples required
+  min_samples: 10000
+  
+  # Train/validation/test split ratios
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  
+  # Random seed for reproducibility
+  random_seed: 42
+  
+  # Text preprocessing
+  preprocessing:
+    max_text_length: 2048
+    min_text_length: 50
+    remove_urls: true
+    remove_special_chars: false
+    lowercase: false
+    remove_extra_whitespace: true
+
+# =============================================================================
+# OCEAN Trait Configuration
+# =============================================================================
+ocean_traits:
+  - name: "openness"
+    abbreviation: "O"
+    description: "Openness to Experience: creativity, curiosity, intellectual interests"
+    high_indicators: ["creative", "curious", "imaginative", "artistic", "open-minded"]
+    low_indicators: ["conventional", "practical", "traditional", "routine-oriented"]
+    
+  - name: "conscientiousness"
+    abbreviation: "C"
+    description: "Conscientiousness: organization, dependability, self-discipline"
+    high_indicators: ["organized", "disciplined", "reliable", "goal-oriented", "careful"]
+    low_indicators: ["careless", "impulsive", "disorganized", "flexible"]
+    
+  - name: "extraversion"
+    abbreviation: "E"
+    description: "Extraversion: sociability, assertiveness, positive emotions"
+    high_indicators: ["outgoing", "energetic", "talkative", "assertive", "social"]
+    low_indicators: ["reserved", "quiet", "solitary", "introspective"]
+    
+  - name: "agreeableness"
+    abbreviation: "A"
+    description: "Agreeableness: cooperation, trust, empathy, altruism"
+    high_indicators: ["cooperative", "trusting", "helpful", "empathetic", "kind"]
+    low_indicators: ["competitive", "skeptical", "challenging", "detached"]
+    
+  - name: "neuroticism"
+    abbreviation: "N"
+    description: "Neuroticism: emotional instability, anxiety, moodiness"
+    high_indicators: ["anxious", "moody", "worried", "emotional", "stressed"]
+    low_indicators: ["calm", "stable", "resilient", "confident", "secure"]
+
+# =============================================================================
+# ML Model Settings (Baseline)
+# =============================================================================
+ml_model:
+  # Sentence Transformer model for embeddings
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  
+  # Alternative models (ranked by quality/speed tradeoff)
+  alternative_models:
+    - "sentence-transformers/all-mpnet-base-v2"  # Higher quality
+    - "sentence-transformers/paraphrase-MiniLM-L6-v2"  # Faster
+  
+  # Embedding dimension (depends on model)
+  embedding_dim: 384  # For MiniLM-L6-v2
+  
+  # Regression model settings
+  regressor:
+    type: "ridge"  # Options: ridge, svr, mlp, xgboost
+    
+    ridge:
+      alpha: 1.0
+      
+    svr:
+      kernel: "rbf"
+      C: 1.0
+      epsilon: 0.1
+      
+    mlp:
+      hidden_layers: [256, 128, 64]
+      activation: "relu"
+      dropout: 0.3
+      learning_rate: 0.001
+      epochs: 100
+      batch_size: 32
+      
+  # Cross-validation
+  cv_folds: 5
+
+# =============================================================================
+# LLM Settings (Gemini)
+# =============================================================================
+llm:
+  provider: "gemini"
+  model: "gemini-1.5-flash"
+  
+  # API settings
+  max_retries: 3
+  retry_delay: 2
+  timeout: 60
+  
+  # Generation settings
+  temperature: 0.3
+  max_output_tokens: 2048
+  
+  # Rate limiting
+  requests_per_minute: 15
+  
+  # Prompt settings
+  include_evidence: true
+  structured_output: true
+
+# =============================================================================
+# Ensemble Settings
+# =============================================================================
+ensemble:
+  # Combination method
+  method: "weighted_average"  # Options: weighted_average, stacking, bayesian
+  
+  # Default weights (can be learned)
+  ml_weight: 0.6
+  llm_weight: 0.4
+  
+  # Calibration
+  calibration:
+    enabled: true
+    method: "isotonic"  # Options: isotonic, platt, quantile
+    
+  # Percentile calculation
+  percentile_bins: 100
+
+# =============================================================================
+# Category Thresholds
+# =============================================================================
+categories:
+  # Based on percentile thresholds
+  low_threshold: 33
+  high_threshold: 67
+  
+  labels:
+    low: "Low"
+    medium: "Medium"
+    high: "High"
+
+# =============================================================================
+# Evaluation Settings
+# =============================================================================
+evaluation:
+  metrics:
+    - "pearson_correlation"
+    - "mae"
+    - "r2"
+    - "rmse"
+    - "spearman_correlation"
+    
+  # Ablation studies
+  ablation:
+    text_length_bins: [100, 250, 500, 1000, 2000]
+    compare_models: ["ml_only", "llm_only", "ensemble"]
+
+# =============================================================================
+# Output Settings
+# =============================================================================
+output:
+  results_dir: "results"
+  models_dir: "models"
+  logs_dir: "logs"
+  
+  # Save intermediate results
+  save_embeddings: true
+  save_predictions: true
+  
+  # Visualization
+  generate_plots: true
+  plot_format: "png"
+  plot_dpi: 300
