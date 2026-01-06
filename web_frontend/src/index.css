@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #1a1a2e;
+  background-color: #f8fafc;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Trait colors */
+.trait-openness { color: #8B5CF6; }
+.trait-conscientiousness { color: #3B82F6; }
+.trait-extraversion { color: #F59E0B; }
+.trait-agreeableness { color: #10B981; }
+.trait-neuroticism { color: #EF4444; }
+
+.bg-trait-openness { background-color: #8B5CF6; }
+.bg-trait-conscientiousness { background-color: #3B82F6; }
+.bg-trait-extraversion { background-color: #F59E0B; }
+.bg-trait-agreeableness { background-color: #10B981; }
+.bg-trait-neuroticism { background-color: #EF4444; }
