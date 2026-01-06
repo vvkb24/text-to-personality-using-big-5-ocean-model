@@ -11,12 +11,15 @@
 
 1. [System Overview](#1-system-overview)
 2. [Architecture Deep Dive](#2-architecture-deep-dive)
-3. [ML Baseline Pipeline](#3-ml-baseline-pipeline)
-4. [Gemini API Integration](#4-gemini-api-integration)
-5. [Ensemble Model](#5-ensemble-model)
-6. [Production Safety Layer](#6-production-safety-layer)
-7. [Web Application Flow](#7-web-application-flow)
-8. [Key Algorithms & Techniques](#8-key-algorithms--techniques)
+3. [ML vs LLM Selection Logic](#3-ml-vs-llm-selection-logic)
+4. [ML Baseline Pipeline](#4-ml-baseline-pipeline)
+5. [Gemini API Integration](#5-gemini-api-integration)
+6. [Ensemble Model](#6-ensemble-model)
+7. [Production Safety Layer](#7-production-safety-layer)
+8. [Web Application Flow](#8-web-application-flow)
+9. [Key Algorithms & Techniques](#9-key-algorithms--techniques)
+10. [Mathematics Deep Dive](#10-mathematics-deep-dive)
+11. [Mathematical Notation Reference](#11-mathematical-notation-reference)
 
 ---
 
@@ -114,7 +117,194 @@ This system analyzes text (essays, social media posts, emails, etc.) and predict
 
 ---
 
-## 3. ML Baseline Pipeline
+## 3. ML vs LLM Selection Logic
+
+### The Core Principle: BOTH Are Used Together
+
+The system doesn't choose between ML and LLM—it uses **both simultaneously** in an ensemble. They complement each other:
+
+```
+Text Input
+    │
+    ├──────────────────────────┬──────────────────────────┐
+    │                          │                          │
+    ▼                          ▼                          │
+┌──────────────────┐    ┌──────────────────┐              │
+│    ML MODEL      │    │    LLM MODEL     │              │
+│    (Local)       │    │    (Gemini)      │              │
+│                  │    │                  │              │
+│  • Always runs   │    │  • Optional      │              │
+│  • ~50ms         │    │  • ~2-5 seconds  │              │
+│  • Consistent    │    │  • Evidence      │              │
+│  • Free          │    │  • API costs     │              │
+└──────────────────┘    └──────────────────┘              │
+    │                          │                          │
+    ▼                          ▼                          │
+ ml_scores                llm_scores                      │
+    │                          │                          │
+    └────────────┬─────────────┘                          │
+                 │                                        │
+                 ▼                                        │
+    ┌───────────────────────────────┐                     │
+    │      ENSEMBLE COMBINE         │                     │
+    │                               │                     │
+    │  final = 0.6 × ML + 0.4 × LLM │                     │
+    │                               │                     │
+    └───────────────────────────────┘                     │
+                 │                                        │
+                 ▼                                        │
+         Final Prediction                                 │
+```
+
+### Control Parameters
+
+The `predict()` function in `src/pipeline.py` accepts parameters to control model usage:
+
+```python
+def predict(
+    self,
+    text: str,
+    include_llm: bool = True,      # ← Controls LLM usage
+    include_evidence: bool = True   # ← Controls evidence extraction
+) -> PersonalityPrediction:
+```
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `include_llm=True` | ✅ Default | Uses both ML + LLM, combines with ensemble weights |
+| `include_llm=False` | | Uses ML only, LLM scores are set to ML scores |
+| `include_evidence=True` | ✅ Default | Extracts text evidence from LLM response |
+| `include_evidence=False` | | Skips evidence extraction (faster) |
+
+### LLM Availability & Fallback Logic
+
+The system automatically handles missing API keys:
+
+```python
+@property
+def llm_engine(self) -> Union[LLMInferenceEngine, MockLLMEngine]:
+    if self._llm_engine is None:
+        if self.config.use_mock_llm:           # ← Config flag
+            self._llm_engine = MockLLMEngine()  # Use mock
+        else:
+            llm_config = LLMConfig(
+                api_key=self.config.llm_api_key or os.getenv("GEMINI_API_KEY", "")
+            )
+            self._llm_engine = create_llm_engine(llm_config)
+    return self._llm_engine
+```
+
+**Decision Tree:**
+
+```
+                    ┌─────────────────────────┐
+                    │  use_mock_llm = True?   │
+                    └───────────┬─────────────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              │ YES             │                 │ NO
+              ▼                 │                 ▼
+    ┌─────────────────┐         │       ┌─────────────────────┐
+    │  MockLLMEngine  │         │       │ Has GEMINI_API_KEY? │
+    │  (Synthetic)    │         │       └──────────┬──────────┘
+    └─────────────────┘         │                  │
+                                │    ┌─────────────┼─────────────┐
+                                │    │ YES         │             │ NO
+                                │    ▼             │             ▼
+                                │ ┌──────────────┐ │  ┌─────────────────┐
+                                │ │ Real Gemini  │ │  │  MockLLMEngine  │
+                                │ │ API Client   │ │  │  (Fallback)     │
+                                │ └──────────────┘ │  └─────────────────┘
+```
+
+### What Each Engine Does
+
+| Engine | When Used | Behavior |
+|--------|-----------|----------|
+| **LLMInferenceEngine** | `GEMINI_API_KEY` is set | Calls real Gemini API, extracts evidence |
+| **MockLLMEngine** | No API key OR `use_mock_llm=True` | Generates synthetic scores with noise |
+
+### MockLLMEngine Details
+
+When no API key is available, the mock engine simulates LLM behavior:
+
+```python
+class MockLLMEngine:
+    """Mock LLM for testing without API access."""
+    
+    def predict(self, text: str) -> LLMPrediction:
+        # Generate scores based on text characteristics
+        scores = {}
+        for trait in OCEAN_TRAITS:
+            # Base score with random variation
+            base = 0.5 + np.random.randn() * 0.15
+            scores[trait] = np.clip(base, 0.1, 0.9)
+        
+        return LLMPrediction(
+            scores=scores,
+            evidence={trait: [] for trait in OCEAN_TRAITS},  # No evidence
+            justifications={trait: "Mock prediction" for trait in OCEAN_TRAITS}
+        )
+```
+
+### Training Mode Options
+
+During training, LLM usage can be controlled separately:
+
+```python
+def train(
+    self,
+    train_texts: List[str],
+    train_labels: Dict[str, np.ndarray],
+    val_texts: List[str] = None,
+    val_labels: Dict[str, np.ndarray] = None,
+    use_llm_for_training: bool = False    # ← Training-specific flag
+):
+```
+
+| `use_llm_for_training` | Effect |
+|------------------------|--------|
+| `False` (default) | ML predictions + noise used as LLM proxy (fast) |
+| `True` | Real LLM called for each training sample (slow, accurate) |
+
+**Why default to False?** Calling the LLM API for hundreds of training samples is slow and expensive. Using ML predictions with added noise provides a reasonable proxy for learning ensemble weights.
+
+### Ensemble Weight Summary
+
+| Scenario | ML Weight | LLM Weight | Result |
+|----------|-----------|------------|--------|
+| Default config | 0.6 | 0.4 | 60% ML, 40% LLM |
+| `include_llm=False` | 1.0 | 0.0 | ML only |
+| After training | Learned | Learned | Optimized per trait |
+
+### Per-Trait Learned Weights
+
+After training on labeled data, each trait gets its own optimal weights:
+
+| Trait | Typical ML Weight | Typical LLM Weight |
+|-------|-------------------|-------------------|
+| Openness | 0.95 | 0.05 |
+| Conscientiousness | 1.00 | 0.00 |
+| Extraversion | 0.95 | 0.05 |
+| Agreeableness | 1.00 | 0.00 |
+| Neuroticism | 0.90 | 0.10 |
+
+**Note:** On synthetic training data, ML tends to dominate. With diverse real-world data, LLM weights would likely increase.
+
+### Quick Reference
+
+| Question | Answer |
+|----------|--------|
+| Is ML always used? | ✅ **Yes**, always runs |
+| Is LLM always used? | ⚠️ **By default yes**, can be disabled |
+| What if no API key? | MockLLMEngine generates synthetic scores |
+| Which is faster? | ML (~50ms) vs LLM (~2-5s) |
+| Which costs money? | Only LLM (Gemini API) |
+| Can I use ML only? | Yes, set `include_llm=False` |
+
+---
+
+## 4. ML Baseline Pipeline
 
 ### Step 1: Text Embedding with Sentence-BERT
 
@@ -218,7 +408,7 @@ Final Score = Average of 5 fold scores
 
 ---
 
-## 4. Gemini API Integration
+## 5. Gemini API Integration
 
 ### Overview
 
@@ -377,7 +567,7 @@ class MockLLMEngine:
 
 ---
 
-## 5. Ensemble Model
+## 6. Ensemble Model
 
 ### Why Ensemble?
 
@@ -475,7 +665,7 @@ def get_percentile(score, reference_distribution):
 
 ---
 
-## 6. Production Safety Layer
+## 7. Production Safety Layer
 
 ### Percentile Clamping
 
@@ -567,7 +757,7 @@ def validate_text_for_prediction(text: str, min_length: int = 50) -> TextValidat
 
 ---
 
-## 7. Web Application Flow
+## 8. Web Application Flow
 
 ### Backend (FastAPI)
 
@@ -651,7 +841,7 @@ Response Received
 
 ---
 
-## 8. Key Algorithms & Techniques
+## 9. Key Algorithms & Techniques
 
 ### 1. Sentence Embeddings (SBERT)
 
@@ -750,9 +940,9 @@ The result is a robust, explainable personality prediction system suitable for r
 
 ---
 
-## 9. Mathematics Deep Dive
+## 10. Mathematics Deep Dive
 
-### 9.1 Sentence-BERT Embeddings
+### 10.1 Sentence-BERT Embeddings
 
 #### Mean Pooling
 
@@ -777,7 +967,7 @@ $$\text{sim}(\mathbf{a}, \mathbf{b}) = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mat
 
 ---
 
-### 9.2 Ridge Regression
+### 10.2 Ridge Regression
 
 #### Problem Setup
 
@@ -830,7 +1020,7 @@ $$w_j \leftarrow w_j - \eta \left( -\frac{2}{N} \sum_{i=1}^{N} (y_i - \hat{y}_i)
 
 ---
 
-### 9.3 Evaluation Metrics
+### 10.3 Evaluation Metrics
 
 #### R² Score (Coefficient of Determination)
 
@@ -871,7 +1061,7 @@ $$r = \frac{\sum_{i=1}^{N}(y_i - \bar{y})(\hat{y}_i - \bar{\hat{y}})}{\sqrt{\sum
 
 ---
 
-### 9.4 Cross-Validation
+### 10.4 Cross-Validation
 
 #### K-Fold Cross-Validation
 
@@ -897,7 +1087,7 @@ $$SE = \frac{\sigma_s}{\sqrt{K}} = \frac{1}{\sqrt{K}} \sqrt{\frac{1}{K-1} \sum_{
 
 ---
 
-### 9.5 Ensemble Weighting
+### 10.5 Ensemble Weighting
 
 #### Weighted Average
 
@@ -938,7 +1128,7 @@ Different traits may have different optimal weights because:
 
 ---
 
-### 9.6 Isotonic Regression (Calibration)
+### 10.6 Isotonic Regression (Calibration)
 
 #### Problem
 
@@ -984,7 +1174,7 @@ where $x_i \leq x \leq x_{i+1}$
 
 ---
 
-### 9.7 Percentile Calculation
+### 10.7 Percentile Calculation
 
 #### Definition
 
@@ -1018,7 +1208,7 @@ $$= \begin{cases}
 
 ---
 
-### 9.8 Confidence Estimation
+### 10.8 Confidence Estimation
 
 #### Text Length Factor
 
@@ -1067,7 +1257,7 @@ $$c_{\text{final}} = \text{clip}\left(0.3 \times c_{\text{length}} + 0.7 \times 
 
 ---
 
-### 9.9 Rate Limiting Mathematics
+### 10.9 Rate Limiting Mathematics
 
 #### Token Bucket Algorithm (Simplified)
 
@@ -1110,7 +1300,7 @@ With base = 2s and $T_{\max}$ = 10s:
 
 ---
 
-### 9.10 Feature Standardization
+### 10.10 Feature Standardization
 
 Before Ridge regression, features are standardized:
 
@@ -1127,7 +1317,7 @@ Where:
 
 ---
 
-### 9.11 Softmax for Category Assignment
+### 10.11 Softmax for Category Assignment
 
 Categories (Low/Medium/High) are assigned based on percentile:
 
@@ -1145,7 +1335,7 @@ Where $a_k(s)$ is an activation function for each category.
 
 ---
 
-## 10. Mathematical Notation Reference
+## 11. Mathematical Notation Reference
 
 | Symbol | Meaning |
 |--------|---------|
@@ -1167,3 +1357,4 @@ Where $a_k(s)$ is an activation function for each category.
 ---
 
 *Documentation generated: January 6, 2026*
+
