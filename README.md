@@ -2,6 +2,9 @@
 
 A research-grade, end-to-end personality trait detection system that analyzes English text to predict Big Five personality traits with continuous scores, percentiles, categorical labels, and evidence-based explanations.
 
+**Version:** 1.1.0 (Production Hardened)  
+**Last Updated:** January 6, 2026
+
 ## 🎯 Overview
 
 This system implements a state-of-the-art approach to personality detection combining:
@@ -12,11 +15,24 @@ This system implements a state-of-the-art approach to personality detection comb
 ### Key Features
 
 - ✅ **Continuous OCEAN Scores** (0-1 scale)
-- ✅ **Percentile Rankings** (relative to training distribution)
+- ✅ **Percentile Rankings** (clamped to 1-99 for safety)
 - ✅ **Category Labels** (Low / Medium / High)
 - ✅ **Evidence Sentences** for each trait prediction
-- ✅ **Confidence Scores** based on model agreement
-- ✅ **Comprehensive Evaluation** with ablation studies
+- ✅ **Confidence Scores** based on text length and model agreement
+- ✅ **Production-Safe API** with comprehensive error handling
+- ✅ **Web Interface** with React frontend
+
+## 🆕 What's New in v1.1.0
+
+### Production Hardening
+- **Percentile Safety**: All percentiles clamped to [1.0, 99.0] to avoid extreme values
+- **Confidence Estimation**: Per-trait confidence scores based on text length and ML/LLM agreement
+- **Text Validation**: Graceful error handling with user-friendly messages
+- **Backend Singleton**: ML model loaded once at startup for fast response times
+- **Normalized Endpoints**: Both `/predict` and `/predict/` work identically
+- **Frontend Safety**: Guards against missing fields and malformed responses
+
+See [PRODUCTION_HARDENING_CHANGELOG.md](PRODUCTION_HARDENING_CHANGELOG.md) for full details.
 
 ## 📊 The Big Five (OCEAN) Model
 
@@ -73,11 +89,24 @@ personality-detection/
 │   ├── ensemble.py          # Ensemble and calibration
 │   ├── evaluation.py        # Evaluation framework
 │   ├── ablation.py          # Ablation studies
-│   └── pipeline.py          # Unified inference pipeline
+│   ├── pipeline.py          # Unified inference pipeline
+│   ├── production_utils.py  # NEW: Production safety utilities
+│   └── utils.py             # Helper utilities
+├── web_backend/
+│   ├── main.py              # FastAPI backend (hardened)
+│   └── requirements.txt
+├── web_frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   └── components/      # React components (with safety guards)
+│   └── package.json
 ├── train.py                 # Main training script
+├── demo.py                  # Quick demo
+├── analyze_essay.py         # Custom text analysis
 ├── example_inference.py     # Inference examples
 ├── requirements.txt         # Dependencies
 ├── .env                     # Environment variables
+├── PRODUCTION_HARDENING_CHANGELOG.md  # v1.1.0 changes
 └── README.md               # This file
 ```
 
@@ -156,6 +185,44 @@ print(analysis)
 
 # Batch prediction
 predictions = predictor.predict_batch(list_of_texts)
+```
+
+## 🌐 Web Application
+
+### Start Backend (Port 8080)
+```bash
+python -m uvicorn web_backend.main:app --host 127.0.0.1 --port 8080
+```
+
+### Start Frontend (Port 3000)
+```bash
+cd web_frontend
+npm install  # First time only
+npm run dev
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check with model status |
+| `/predict` | POST | Personality prediction |
+| `/predict/` | POST | Same as above (normalized) |
+| `/docs` | GET | Swagger UI documentation |
+
+### API Response Schema (v1.1.0)
+```json
+{
+  "scores": {"openness": 0.723, ...},
+  "percentiles": {"openness": 78.5, ...},
+  "categories": {"openness": "High", ...},
+  "evidence": {"openness": ["sentence1", ...], ...},
+  "confidences": {"openness": 0.85, ...},
+  "traits": {...},
+  "text_length": 391,
+  "warning": null,
+  "model_info": {...}
+}
 ```
 
 ## 📈 Methodology
@@ -305,6 +372,28 @@ Contributions are welcome! Please read our contributing guidelines and submit pu
 ## 📧 Contact
 
 For questions or collaboration, please open an issue on the repository.
+
+---
+
+## 📝 Changelog
+
+### v1.1.0 (January 6, 2026) - Production Hardening
+- Added percentile safety (clamped to 1-99)
+- Added per-trait confidence scores
+- Added text validation with graceful errors
+- Backend loads ML model once at startup
+- Normalized `/predict` and `/predict/` endpoints
+- Frontend guards against missing fields
+- New file: `src/production_utils.py`
+- New file: `PRODUCTION_HARDENING_CHANGELOG.md`
+
+### v1.0.0 (January 5-6, 2026) - Initial Release
+- Core ML pipeline with Sentence-BERT + Ridge regression
+- LLM integration with Google Gemini
+- Ensemble model with calibration
+- FastAPI backend
+- React frontend with Tailwind CSS
+- Comprehensive documentation
 
 ---
 

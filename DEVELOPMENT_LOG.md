@@ -27,10 +27,11 @@ personality detection vscode/
 │   ├── evaluation.py           # Metrics (Pearson, MAE, R²)
 │   ├── ablation.py             # Model comparison studies
 │   ├── pipeline.py             # Unified API: create_predictor()
+│   ├── production_utils.py     # NEW: Production safety utilities
 │   └── utils.py                # Utilities
 │
 ├── web_backend/                # FastAPI REST API
-│   ├── main.py                 # POST /predict, GET /health
+│   ├── main.py                 # POST /predict, GET /health (hardened)
 │   └── requirements.txt
 │
 ├── web_frontend/               # React UI
@@ -47,7 +48,8 @@ personality detection vscode/
 ├── config/settings.yaml        # Configuration
 ├── requirements.txt            # Python dependencies
 ├── .env                        # API keys (GEMINI_API_KEY)
-└── README.md                   # Main documentation
+├── README.md                   # Main documentation
+└── PRODUCTION_HARDENING_CHANGELOG.md  # NEW: v1.1.0 changes
 ```
 
 ---
@@ -161,6 +163,42 @@ Training on 500 synthetic samples:
 3. **Web Backend** (Jan 6): `web_backend/main.py` (FastAPI)
 4. **Web Frontend** (Jan 6): React + Tailwind + Recharts
 5. **Reports**: `PROJECT_REPORT.md`, `ANALYSIS_REPORT.md`, `WEB_APP_REPORT.md`
+6. **Production Hardening** (Jan 6 - v1.1.0):
+   - `src/production_utils.py` - Safety utilities
+   - `PRODUCTION_HARDENING_CHANGELOG.md` - Change documentation
+   - Updated `web_backend/main.py` - Backend hardening
+   - Updated `web_frontend/src/components/*.jsx` - Frontend safety
+
+---
+
+## 🆕 v1.1.0 Production Hardening (Jan 6, 2026)
+
+### New Features
+- **Percentile Safety**: Clamped to [1.0, 99.0] to avoid extreme values
+- **Confidence Scores**: Per-trait confidence based on text length + ML/LLM agreement
+- **Text Validation**: Graceful error handling with user-friendly messages
+- **Warning System**: Alerts users when input may produce less accurate results
+
+### Backend Changes
+- ML pipeline loaded once at startup (singleton pattern)
+- Dual endpoint registration (`/predict` and `/predict/`)
+- Reference distributions stored for stable percentile computation
+- Enhanced `/health` endpoint with diagnostics
+
+### Frontend Changes
+- Safe data access helpers (`safeGet`, `safeGetEvidence`)
+- Client-side percentile clamping
+- Confidence score display with color coding
+- Warning banner for suboptimal input
+
+### Files Added/Modified
+| File | Change Type |
+|------|-------------|
+| `src/production_utils.py` | NEW |
+| `PRODUCTION_HARDENING_CHANGELOG.md` | NEW |
+| `web_backend/main.py` | Modified |
+| `web_frontend/src/components/ResultsDisplay.jsx` | Modified |
+| `web_frontend/src/components/TraitCard.jsx` | Modified |
 
 ---
 
@@ -173,4 +211,4 @@ Training on 500 synthetic samples:
 
 ---
 
-*Last updated: January 6, 2026*
+*Last updated: January 6, 2026 (v1.1.0)*

@@ -1,5 +1,8 @@
 # Personality Detection System - Complete Project Report
 
+**Version:** 1.1.0 (Production Hardened)  
+**Last Updated:** January 6, 2026
+
 ## 📋 Table of Contents
 1. [Project Overview](#project-overview)
 2. [Technologies & Frameworks](#technologies--frameworks)
@@ -9,6 +12,7 @@
 6. [Execution Guide](#execution-guide)
 7. [Results & Performance](#results--performance)
 8. [File Structure](#file-structure)
+9. [Production Hardening (v1.1.0)](#production-hardening-v110)
 
 ---
 
@@ -26,10 +30,12 @@ This project implements a **research-grade personality trait detection system** 
 
 ### Key Features
 - ✅ Continuous scores (0-1) for each trait
-- ✅ Percentile rankings
+- ✅ Percentile rankings (clamped to 1-99 for production safety)
 - ✅ Categories (Low/Medium/High)
 - ✅ Evidence sentences for explainability
 - ✅ Ensemble of ML + LLM approaches
+- ✅ Per-trait confidence scores (v1.1.0)
+- ✅ Production-safe web API with hardening (v1.1.0)
 - ✅ Ablation studies for model analysis
 
 ---
@@ -576,7 +582,74 @@ personality detection vscode/
 | `evaluation.py` | ~450 | Metrics (Pearson, MAE, R²), visualization |
 | `ablation.py` | ~640 | Model comparison, text length study, calibration study |
 | `pipeline.py` | ~470 | Unified API, factory functions |
+| `production_utils.py` | ~400 | **NEW** Production safety utilities |
 | `utils.py` | ~200 | Helper functions, logging |
+
+---
+
+## 🔒 Production Hardening (v1.1.0)
+
+### Overview
+
+Version 1.1.0 introduces production-safe modifications to make the system web-ready without disturbing existing ML pipeline behavior.
+
+### New Features
+
+#### 1. Percentile Safety
+- All percentiles clamped to [1.0, 99.0]
+- Prevents extreme values (0.0/100.0) that imply false certainty
+- Computed against stored training reference distributions
+
+#### 2. Confidence Estimation
+Per-trait confidence scores based on:
+- **Text length**: Longer texts provide more signal
+- **Prediction stability**: ML/LLM agreement indicates reliability
+
+```python
+confidence = 0.3 * text_length_factor + 0.7 * stability_factor
+```
+
+#### 3. Text Validation
+- Minimum 50 characters required
+- Graceful error messages for users
+- Warning for suboptimal input length
+
+#### 4. Backend Hardening
+- ML pipeline loaded once at startup (singleton)
+- Both `/predict` and `/predict/` work identically
+- Enhanced `/health` endpoint with diagnostics
+- Strict Pydantic schema enforcement
+
+#### 5. Frontend Safety
+- Guards against missing/null fields
+- Client-side percentile clamping
+- Confidence score display with color coding
+- Warning banner for short text
+
+### New File: `src/production_utils.py`
+
+```python
+# Key functions:
+clamp_percentile(percentile) -> float  # Clamps to [1, 99]
+estimate_trait_confidence(...) -> float  # Per-trait confidence
+validate_text_for_prediction(text) -> TextValidationResult
+ensure_complete_response(...) -> Dict  # Schema enforcement
+```
+
+### API Response Changes
+
+New fields in v1.1.0:
+```json
+{
+  "confidences": {"openness": 0.85, ...},
+  "warning": "Text is relatively short...",
+  "model_info": {
+    "percentile_bounds": {"min": 1.0, "max": 99.0}
+  }
+}
+```
+
+See [PRODUCTION_HARDENING_CHANGELOG.md](PRODUCTION_HARDENING_CHANGELOG.md) for complete details.
 
 ---
 
