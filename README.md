@@ -1,5 +1,7 @@
 # Personality Detection System using Big Five (OCEAN) Model
 
+(This is an experimental project, purely for research)
+
 A research-grade, end-to-end personality trait detection system that analyzes English text to predict Big Five personality traits with continuous scores, percentiles, categorical labels, and evidence-based explanations.
 
 **Version:** 1.1.0 (Production Hardened)  
